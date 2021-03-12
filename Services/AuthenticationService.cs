@@ -4,8 +4,10 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
 using System.Security.Claims;
 using System.Text;
+using dotnet_jwtAuth.Configs;
 using dotnet_jwtAuth.Entities;
 using dotnet_jwtAuth.Models;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
 namespace dotnet_jwtAuth.Services
@@ -21,6 +23,13 @@ namespace dotnet_jwtAuth.Services
     public class AuthenticationService: IAuthenticationService
     {
       private IAuthenticationService _authenService;
+
+      private readonly JwtTokenConfig _jwtTokenConfig;
+
+      public AuthenticationService(IOptions<JwtTokenConfig> appSettings)
+      {
+        _jwtTokenConfig = appSettings.Value;
+      }
 
       //Temporary
       private List<User> _users = new List<User>
@@ -42,19 +51,18 @@ namespace dotnet_jwtAuth.Services
           return new AuthenticateResponse(user, token);
       }
 
-      private const string Secret = "my-ultra-secure-and-ultra-long-secret";
       private string generateJwtToken(User user)
       {
         // generate token that is valid for 1 days
         var tokenHandler = new JwtSecurityTokenHandler();
-        var key = Encoding.ASCII.GetBytes(Secret); //SomeSecrets
+        var key = Encoding.ASCII.GetBytes(_jwtTokenConfig.Secret);
         var tokenDescriptor = new SecurityTokenDescriptor
         {
             Subject = new ClaimsIdentity(new[] { new Claim("id", user.Id.ToString()) }),
-            Expires = DateTime.UtcNow.AddDays(1),
+            Expires = DateTime.UtcNow.AddDays(_jwtTokenConfig.AccessTokenExpiration),
             SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature),
-            Issuer = @"auycro",
-            Audience = @"https://localhost:5001",
+            Issuer = _jwtTokenConfig.Issuer,
+            Audience = _jwtTokenConfig.Audience,
         };
         var token = tokenHandler.CreateToken(tokenDescriptor);
         return tokenHandler.WriteToken(token);        

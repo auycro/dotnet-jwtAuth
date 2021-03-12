@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using dotnet_jwtAuth.Configs;
 using dotnet_jwtAuth.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
@@ -27,62 +28,64 @@ namespace dotnet_jwtAuth
 
         public IConfiguration Configuration { get; }
 
-        private const string Secret = "my-ultra-secure-and-ultra-long-secret";
-
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
-            services.AddAuthentication(options => {
-              options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-              options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-            }).AddJwtBearer(options =>
-            {
-              options.RequireHttpsMetadata = true;
-              options.TokenValidationParameters = new TokenValidationParameters{
-                ValidateIssuerSigningKey = true,
-                IssuerSigningKey = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(Secret)),
-                ValidateIssuer = true,
-                ValidIssuer = @"auycro",
-                ValidAudience = @"https://localhost:5001",
-              };
-            });
+          services.Configure<JwtTokenConfig>(Configuration.GetSection("JwtTokenConfig"));
 
-            services.AddControllers();
-            services.AddSwaggerGen(c =>
-            {
-                c.SwaggerDoc("v1", new OpenApiInfo { Title = "dotnet_jwtAuth", Version = "v1" });
+          services.AddAuthentication(options => {
+            options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+            options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+          }).AddJwtBearer(options =>
+          {
+            var jwtconfig = Configuration.GetSection(nameof(JwtTokenConfig)).Get<JwtTokenConfig>();
+            
+            options.RequireHttpsMetadata = true;
+            options.TokenValidationParameters = new TokenValidationParameters{
+              ValidateIssuerSigningKey = true,
+              IssuerSigningKey = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(jwtconfig.Secret)),
+              ValidateIssuer = true,
+              ValidIssuer = jwtconfig.Issuer,
+              ValidAudience = jwtconfig.Audience,
+            };
+          });
 
-                c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+          services.AddControllers();
+          services.AddSwaggerGen(c =>
+          {
+              c.SwaggerDoc("v1", new OpenApiInfo { Title = "dotnet_jwtAuth", Version = "v1" });
+
+              c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+              {
+                Description = "JWT Authorization header using the Bearer scheme.",
+                Name = "Authorization",
+                In = ParameterLocation.Header,
+                Type = SecuritySchemeType.Http,
+                BearerFormat = "JWT",
+                Scheme = "Bearer"
+              });
+              
+              c.AddSecurityRequirement(new OpenApiSecurityRequirement()
+              {
                 {
-                  Description = "JWT Authorization header using the Bearer scheme.",
-                  Name = "Authorization",
-                  In = ParameterLocation.Header,
-                  Type = SecuritySchemeType.Http,
-                  BearerFormat = "JWT",
-                  Scheme = "Bearer"
-                });
-                
-                c.AddSecurityRequirement(new OpenApiSecurityRequirement()
-                {
-                  {
-                      new OpenApiSecurityScheme
-                      {
-                          Reference = new OpenApiReference
-                          {
-                              Type = ReferenceType.SecurityScheme,
-                              Id = "Bearer"
-                          },
-                          Scheme = "Bearer",
-                          Name = "Bearer",
-                          In = ParameterLocation.Header,
+                    new OpenApiSecurityScheme
+                    {
+                        Reference = new OpenApiReference
+                        {
+                            Type = ReferenceType.SecurityScheme,
+                            Id = "Bearer"
+                        },
+                        Scheme = "Bearer",
+                        Name = "Bearer",
+                        In = ParameterLocation.Header,
 
-                      },
-                      new List<string>()
-                  }
-                });
-            });
+                    },
+                    new List<string>()
+                }
+              });
+          });
 
-            services.AddScoped<IAuthenticationService, AuthenticationService>();
+          services.AddScoped<IAuthenticationService, AuthenticationService>();
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
